@@ -10,8 +10,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/ginkio/unifictl/internal/config"
-	"github.com/ginkio/unifictl/internal/unifi"
+	"github.com/ginkio-nl/unifictl/internal/config"
+	"github.com/ginkio-nl/unifictl/internal/unifi"
 )
 
 const testKey = "secret"

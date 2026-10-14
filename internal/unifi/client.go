@@ -9,7 +9,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/ginkio/unifictl/internal/httpx"
+	"github.com/ginkio-nl/unifictl/internal/httpx"
 )
 
 // pageSize is the maximum page size accepted by the Integration API.

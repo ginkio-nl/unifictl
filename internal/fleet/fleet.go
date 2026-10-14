@@ -10,10 +10,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ginkio/unifictl/internal/config"
-	"github.com/ginkio/unifictl/internal/httpx"
-	"github.com/ginkio/unifictl/internal/sitemanager"
-	"github.com/ginkio/unifictl/internal/unifi"
+	"github.com/ginkio-nl/unifictl/internal/config"
+	"github.com/ginkio-nl/unifictl/internal/httpx"
+	"github.com/ginkio-nl/unifictl/internal/sitemanager"
+	"github.com/ginkio-nl/unifictl/internal/unifi"
 )
 
 // Console is a reachable UniFi Network application.

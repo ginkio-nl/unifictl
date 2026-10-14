@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ginkio/unifictl/internal/fleet"
-	"github.com/ginkio/unifictl/internal/output"
-	"github.com/ginkio/unifictl/internal/unifi"
+	"github.com/ginkio-nl/unifictl/internal/fleet"
+	"github.com/ginkio-nl/unifictl/internal/output"
+	"github.com/ginkio-nl/unifictl/internal/unifi"
 )
 
 // ConsolesCmd lists consoles.

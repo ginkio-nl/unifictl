@@ -1,6 +1,23 @@
 # unifictl
 
-Query many UniFi consoles and sites at once from the command line.
+A Go command-line tool that lets an MSP query all its customers' UniFi
+networks from one place.
+
+With a single UniFi Site Manager API key, it finds every console on your
+account and reaches each one through Ubiquiti's cloud connector, so you don't
+need a VPN or LAN access. It can also query individual consoles directly with
+their own keys.
+
+It queries all consoles and sites at the same time and lists consoles, sites,
+devices and connected clients as a table or JSON. You can narrow the results
+to certain customers or sites, or filter for things like offline devices. If
+one customer's console is down, you get a warning for it and still see
+everyone else's results.
+
+> **Status:** early. Tested against a fake API server; not yet validated
+> against a real UniFi account.
+
+## Sources
 
 Consoles come from **sources**:
 
@@ -16,7 +33,7 @@ stderr; the other results are still printed and the exit code is non-zero.
 ## Install
 
 ```sh
-go install github.com/ginkio/unifictl/cmd/unifictl@latest
+go install github.com/ginkio-nl/unifictl/cmd/unifictl@latest
 ```
 
 ## Configure

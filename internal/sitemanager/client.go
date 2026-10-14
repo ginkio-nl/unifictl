@@ -7,7 +7,7 @@ import (
 	"context"
 	"net/url"
 
-	"github.com/ginkio/unifictl/internal/httpx"
+	"github.com/ginkio-nl/unifictl/internal/httpx"
 )
 
 // Client talks to the Site Manager API.

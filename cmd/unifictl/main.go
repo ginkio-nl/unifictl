@@ -15,8 +15,8 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/joho/godotenv"
 
-	"github.com/ginkio/unifictl/internal/config"
-	"github.com/ginkio/unifictl/internal/fleet"
+	"github.com/ginkio-nl/unifictl/internal/config"
+	"github.com/ginkio-nl/unifictl/internal/fleet"
 )
 
 var version = "dev"
