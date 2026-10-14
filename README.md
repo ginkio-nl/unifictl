@@ -1,34 +1,12 @@
 # unifictl
 
-A Go command-line tool that lets an MSP query all its customers' UniFi
-networks from one place.
+A Go command-line tool that gives an MSP an overview of all its customers'
+UniFi networks, using a single unifi.ui.com API key.
 
-With a single UniFi Site Manager API key, it finds every console on your
-account and reaches each one through Ubiquiti's cloud connector, so you don't
-need a VPN or LAN access. It can also query individual consoles directly with
-their own keys.
-
-It queries all consoles and sites at the same time and lists consoles, sites,
-devices and connected clients as a table or JSON. You can narrow the results
-to certain customers or sites, or filter for things like offline devices. If
-one customer's console is down, you get a warning for it and still see
-everyone else's results.
-
-> **Status:** early. Tested against a fake API server; not yet validated
-> against a real UniFi account.
-
-## Sources
-
-Consoles come from **sources**:
-
-- **`sitemanager`** — a UniFi Site Manager account (`api.ui.com`). One API key
-  discovers every console the account can see and reaches each one through the
-  cloud connector. Ideal for MSPs.
-- **`local`** — a single console reached directly by URL with its own key.
-
-Queries fan out concurrently across all consoles and sites. Failures on one
-console (offline, firmware too old, bad key) are reported as warnings on
-stderr; the other results are still printed and the exit code is non-zero.
+It lists every site with its device, offline, and client counts and its
+internet provider, and every device with its status and firmware. It works for
+all sites your ui.com account can see — including consoles you administer but
+don't own.
 
 ## Install
 
@@ -38,47 +16,40 @@ go install github.com/ginkio-nl/unifictl/cmd/unifictl@latest
 
 ## Configure
 
+Create an API key at **unifi.ui.com → Settings → API Keys**, then:
+
 ```sh
 mkdir -p ~/.config/unifictl
-cp config.example.yaml ~/.config/unifictl/config.yaml
-cp .env.example ~/.config/unifictl/.env   # then fill in your keys
+cp .env.example ~/.config/unifictl/.env   # paste the key in
+chmod 600 ~/.config/unifictl/.env
 ```
 
-API keys referenced by `api_key_env` are read from the environment, with
-`.env` files loaded automatically (no `source`/`export` needed):
-
-1. `./.env` in the current directory (may also set `UNIFICTL_CONFIG`)
-2. `.env` next to the config file, e.g. `~/.config/unifictl/.env`
-
-Variables already exported in your shell take precedence over `.env` values,
-and earlier files take precedence over later ones. Keep `.env` out of git
-(`chmod 600` it).
+The key is read from `UNIFI_SITEMANAGER_KEY`: an exported variable wins, then
+`./.env`, then `~/.config/unifictl/.env`.
 
 ## Usage
 
 ```sh
-unifictl consoles                   # all consoles from all sources
-unifictl consoles --check           # also contact each Network app
-unifictl sites
-unifictl devices --state OFFLINE    # every offline device, everywhere
-unifictl clients --type WIRELESS -C 'acme*'
-unifictl devices -S msp -s warehouse -o json | jq .
+unifictl sites                    # all sites
+unifictl sites --offline          # sites with offline devices
+unifictl sites -n 'keesde*'       # sites by name
+unifictl devices --offline        # offline devices
+unifictl devices --updates        # devices with a firmware update
+unifictl devices -s 'svrk*'       # devices of a site
+unifictl sites -o json | jq .     # JSON output
 ```
 
-Global filters (all accept multiple values / comma-separated):
+## Limits (from ui.com, not this tool)
 
-| Flag | Filters |
-| --- | --- |
-| `-S, --source` | source names from the config |
-| `-C, --console` | console name or ID (glob, case-insensitive) |
-| `-s, --site` | site name, internal reference, or ID (glob, case-insensitive) |
-
-## Notes
-
-- Site Manager is rate limited per API key. Each source has its own request
-  limiter (`max_concurrency`, default 4 for `sitemanager`, 8 for `local`) and
-  `429` responses are retried honoring `Retry-After`.
-- The cloud connector requires reasonably recent console firmware.
+- **Devices on a server with many sites have no site.** ui.com only says which
+  console or server a device belongs to. For a customer's own console (one
+  site) that's enough; for a hosted server with many customers it isn't, so
+  `SITE` shows `-` and `devices -s` can't match them.
+- **No list of connected clients**, only counts per site.
+- **Site names follow ui.com.** A console with a single site called "Default"
+  is shown by the console's name, as unifi.ui.com does. This is observed
+  behaviour, not documented; `-o json` keeps the raw name in `siteName`. See
+  `siteName` in `internal/report/report.go`.
 
 ## Development
 

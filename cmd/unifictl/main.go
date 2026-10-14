@@ -1,4 +1,4 @@
-// Command unifictl queries UniFi consoles and sites across multiple sources.
+// Command unifictl gives an overview of all UniFi sites on a ui.com account.
 package main
 
 import (
@@ -9,96 +9,91 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"syscall"
 	"time"
 
 	"github.com/alecthomas/kong"
 	"github.com/joho/godotenv"
 
-	"github.com/ginkio-nl/unifictl/internal/config"
-	"github.com/ginkio-nl/unifictl/internal/fleet"
+	"github.com/ginkio-nl/unifictl/internal/httpx"
+	"github.com/ginkio-nl/unifictl/internal/sitemanager"
 )
 
-var version = "dev"
+// keyEnv names the environment variable holding the ui.com API key.
+const keyEnv = "UNIFI_SITEMANAGER_KEY"
+
+// version is set via -ldflags by the Makefile; see buildVersion.
+var version string
+
+// buildVersion returns the ldflags version, falling back to the module
+// version Go embeds for `go install ...@vX.Y.Z` builds.
+func buildVersion() string {
+	if version != "" {
+		return version
+	}
+	if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+		return info.Main.Version
+	}
+	return "dev"
+}
 
 // Globals are flags shared by every command.
 type Globals struct {
-	Config      string        `short:"c" type:"path" default:"~/.config/unifictl/config.yaml" env:"UNIFICTL_CONFIG" help:"Path to the config file."`
-	Source      []string      `short:"S" help:"Only use these sources (by name)."`
-	Console     []string      `short:"C" help:"Only query consoles matching these globs (name or ID)."`
-	Site        []string      `short:"s" help:"Only query sites matching these globs (name, reference, or ID)."`
-	Output      string        `short:"o" enum:"table,json" default:"table" help:"Output format (${enum})."`
-	Timeout     time.Duration `default:"30s" help:"Per-request timeout."`
-	Concurrency int           `default:"16" help:"Maximum consoles/sites queried in parallel (per-source request limits still apply)."`
-
-	failures int
+	Output  string        `short:"o" enum:"table,json" default:"table" help:"Output format (${enum})."`
+	Timeout time.Duration `default:"30s" help:"Per-request timeout."`
 }
 
 // CLI is the root command.
 type CLI struct {
 	Globals
 
-	Consoles ConsolesCmd      `cmd:"" help:"List consoles from all sources."`
-	Sites    SitesCmd         `cmd:"" help:"List sites across all consoles."`
-	Devices  DevicesCmd       `cmd:"" help:"List devices across all sites."`
-	Clients  ClientsCmd       `cmd:"" help:"List connected clients across all sites."`
-	Version  kong.VersionFlag `help:"Print version and exit."`
+	Sites   SitesCmd         `cmd:"" help:"List all sites with device and client counts."`
+	Devices DevicesCmd       `cmd:"" help:"List all devices."`
+	Version kong.VersionFlag `help:"Print version and exit."`
 }
 
 func main() {
-	// Loaded before parsing so .env can also set UNIFICTL_CONFIG.
-	if err := loadDotenv(".env"); err != nil {
-		fmt.Fprintf(os.Stderr, "unifictl: error: %v\n", err)
-		os.Exit(1)
+	// Real environment variables win over .env files, and ./.env wins over
+	// the one in the config directory.
+	for _, p := range dotenvPaths() {
+		if err := loadDotenv(p); err != nil {
+			fmt.Fprintf(os.Stderr, "unifictl: error: %v\n", err)
+			os.Exit(1)
+		}
 	}
 
 	var cli CLI
 	kctx := kong.Parse(&cli,
 		kong.Name("unifictl"),
-		kong.Description("Query UniFi consoles and sites across Site Manager accounts and local consoles."),
+		kong.Description("Overview of all UniFi sites and devices on a ui.com account."),
 		kong.UsageOnError(),
-		kong.Vars{"version": version},
+		kong.Vars{"version": buildVersion()},
 	)
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	kctx.BindTo(ctx, (*context.Context)(nil))
 
-	err := kctx.Run(&cli.Globals)
-	if err == nil && cli.failures > 0 {
-		err = fmt.Errorf("%d target(s) failed; results are incomplete", cli.failures)
-	}
-	kctx.FatalIfErrorf(err)
+	kctx.FatalIfErrorf(kctx.Run(&cli.Globals))
 }
 
-func (g *Globals) filter() fleet.Filter {
-	return fleet.Filter{Consoles: g.Console, Sites: g.Site}
+// client builds a Site Manager client from the API key in the environment.
+func (g *Globals) client() (*sitemanager.Client, error) {
+	key := os.Getenv(keyEnv)
+	if key == "" {
+		return nil, fmt.Errorf("%s is not set: add it to ~/.config/unifictl/.env (create a key at unifi.ui.com → Settings → API Keys)", keyEnv)
+	}
+	req := httpx.New(httpx.Options{APIKey: key, Timeout: g.Timeout, Limiter: httpx.NewLimiter(4)})
+	return sitemanager.New(sitemanager.DefaultURL, req), nil
 }
 
-// warn reports partial failures on stderr and remembers them for the exit code.
-func (g *Globals) warn(errs []error) {
-	for _, err := range errs {
-		fmt.Fprintf(os.Stderr, "warning: %v\n", err)
+func dotenvPaths() []string {
+	paths := []string{".env"}
+	if dir, err := os.UserHomeDir(); err == nil {
+		paths = append(paths, filepath.Join(dir, ".config", "unifictl", ".env"))
 	}
-	g.failures += len(errs)
-}
-
-// consoles loads the config and resolves the selected consoles.
-func (g *Globals) consoles(ctx context.Context) ([]fleet.Console, error) {
-	if err := loadDotenv(filepath.Join(filepath.Dir(g.Config), ".env")); err != nil {
-		return nil, err
-	}
-	cfg, err := config.Load(g.Config)
-	if err != nil {
-		return nil, err
-	}
-	srcs, err := cfg.Select(g.Source)
-	if err != nil {
-		return nil, err
-	}
-	consoles, errs := fleet.Resolve(ctx, srcs, g.filter(), g.Timeout)
-	g.warn(errs)
-	return consoles, nil
+	return paths
 }
 
 // loadDotenv sets variables from a .env file if it exists. Variables already
@@ -109,15 +104,4 @@ func loadDotenv(path string) error {
 		return nil
 	}
 	return fmt.Errorf("load %s: %w", path, err)
-}
-
-// sites resolves consoles and lists the selected sites on each.
-func (g *Globals) sites(ctx context.Context) ([]fleet.SiteRef, error) {
-	consoles, err := g.consoles(ctx)
-	if err != nil {
-		return nil, err
-	}
-	sites, errs := fleet.Sites(ctx, consoles, g.filter(), g.Concurrency)
-	g.warn(errs)
-	return sites, nil
 }
