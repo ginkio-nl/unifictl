@@ -79,3 +79,11 @@ Global filters (all accept multiple values / comma-separated):
   limiter (`max_concurrency`, default 4 for `sitemanager`, 8 for `local`) and
   `429` responses are retried honoring `Retry-After`.
 - The cloud connector requires reasonably recent console firmware.
+
+## Development
+
+```sh
+make          # vet, test, check formatting, then build ./unifictl
+make install  # go install with version info from git describe
+make help     # list all targets
+```
