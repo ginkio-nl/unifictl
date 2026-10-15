@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/signal"
@@ -18,6 +19,7 @@ import (
 
 	"github.com/ginkio-nl/unifictl/internal/config"
 	"github.com/ginkio-nl/unifictl/internal/httpx"
+	"github.com/ginkio-nl/unifictl/internal/output"
 	"github.com/ginkio-nl/unifictl/internal/report"
 	"github.com/ginkio-nl/unifictl/internal/sitemanager"
 )
@@ -44,7 +46,8 @@ func buildVersion() string {
 type Globals struct {
 	Config   string        `short:"c" type:"path" default:"~/.config/unifictl/config.yaml" env:"UNIFICTL_CONFIG" help:"Settings file (optional)."`
 	NoIgnore bool          `help:"Show sites on the config file's ignore list too."`
-	Output   string        `short:"o" enum:"table,json" default:"table" help:"Output format (${enum})."`
+	Output   string        `short:"o" enum:"table,json,xlsx" default:"table" help:"Output format (${enum}); xlsx needs -f or a redirect."`
+	File     string        `short:"f" type:"path" help:"Write the output to this file instead of stdout."`
 	Timeout  time.Duration `default:"30s" help:"Per-request timeout."`
 
 	ignore []string
@@ -57,6 +60,7 @@ type CLI struct {
 	Sites    SitesCmd         `cmd:"" help:"List all sites with device and client counts."`
 	Devices  DevicesCmd       `cmd:"" help:"List all devices."`
 	Networks NetworksCmd      `cmd:"" help:"List all networks (name, VLAN, subnet) per site."`
+	VPN      VPNCmd           `cmd:"" name:"vpn" help:"List VPN servers and site-to-site tunnels per site."`
 	Version  kong.VersionFlag `help:"Print version and exit."`
 }
 
@@ -102,6 +106,55 @@ func (g *Globals) client() (*sitemanager.Client, error) {
 	}
 	req := httpx.New(httpx.Options{APIKey: key, Timeout: g.Timeout, Limiter: httpx.NewLimiter(2)})
 	return sitemanager.New(sitemanager.DefaultURL, req), nil
+}
+
+// checkOutput rejects output settings that can't work, before any slow
+// requests are made.
+func (g *Globals) checkOutput() error {
+	if g.Output != "xlsx" {
+		return nil
+	}
+	if g.File == "" {
+		if fi, err := os.Stdout.Stat(); err == nil && fi.Mode()&os.ModeCharDevice != 0 {
+			return errors.New("xlsx is a binary format: add -f FILE.xlsx or redirect the output to a file")
+		}
+	}
+	return nil
+}
+
+// write sends a command's output to stdout or to --file.
+func (g *Globals) write(fn func(w io.Writer) error) error {
+	if g.File == "" {
+		return fn(os.Stdout)
+	}
+	f, err := os.Create(g.File)
+	if err != nil {
+		return err
+	}
+	if err := fn(f); err != nil {
+		f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "wrote %s\n", g.File)
+	return nil
+}
+
+// json writes v as JSON to stdout or --file.
+func (g *Globals) json(v any) error {
+	return g.write(func(w io.Writer) error { return output.JSON(w, v) })
+}
+
+// table writes a text table to stdout or --file.
+func (g *Globals) table(headers []string, rows [][]string) error {
+	return g.write(func(w io.Writer) error { return output.Table(w, headers, rows) })
+}
+
+// xlsx writes a worksheet to --file or stdout.
+func (g *Globals) xlsx(sheet output.Sheet) error {
+	return g.write(func(w io.Writer) error { return output.XLSX(w, sheet) })
 }
 
 // ignored reports whether a site is on the config file's ignore list.

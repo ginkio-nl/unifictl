@@ -99,12 +99,12 @@ type Device struct {
 	IsConsole      bool   `json:"isConsole"`
 }
 
-// NetworkBase returns the root of a console's Network Integration API,
-// reached through the cloud connector. ui.com only allows this when the API
-// key's account owns the console and the key has the Network application
-// scope for it.
+// NetworkBase returns the root of a console's Network application, reached
+// through the cloud connector. ui.com only allows this when the API key's
+// account owns the console and the key has the Network application scope
+// for it.
 func (c *Client) NetworkBase(hostID string) string {
-	return c.base + "/v1/connector/consoles/" + url.PathEscape(hostID) + "/proxy/network/integration"
+	return c.base + "/v1/connector/consoles/" + url.PathEscape(hostID) + "/proxy/network"
 }
 
 // Requester returns the HTTP requester, to share its key and rate limit.

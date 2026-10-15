@@ -4,8 +4,9 @@ A Go command-line tool that gives an MSP an overview of all its customers'
 UniFi networks, using a single unifi.ui.com API key.
 
 It lists every site with its device, offline, and client counts and its
-internet provider; every device with its status and firmware; and every
-network per site with its VLAN, subnet, gateway, and DHCP range.
+internet provider; every device with its status and firmware; every
+network per site with its VLAN, subnet, gateway, and DHCP range; and every
+VPN server and site-to-site tunnel per site.
 
 unifictl only ever reads: it sends GET requests and nothing else.
 
@@ -17,8 +18,8 @@ go install github.com/ginkio-nl/unifictl/cmd/unifictl@latest
 
 ## Configure
 
-Create an API key at **unifi.ui.com → Settings → API Keys**. For `networks`
-the key must be created by the **owner** of the consoles, with **UniFi
+Create an API key at **unifi.ui.com → Settings → API Keys**. For `networks` and
+`vpn` the key must be created by the **owner** of the consoles, with **UniFi
 Applications → Network** ticked for the sites you want. ui.com has no read-only
 keys, so treat it as a key that can change settings. Then:
 
@@ -56,9 +57,14 @@ unifictl sites -n 'keesde*'       # sites by name
 unifictl devices --offline        # offline devices
 unifictl devices --updates        # devices with a firmware update
 unifictl devices -s 'svrk*'       # devices of a site
-unifictl networks                 # networks per site: VLAN, subnet, DHCP
+unifictl networks                 # networks per site: VLAN and subnet
+unifictl networks -v              # … plus gateway and DHCP range
 unifictl networks -n 'earforce*'  # networks of one site
-unifictl sites -o json | jq .     # JSON output
+unifictl networks --overlaps      # add VPN subnets; mark clashes with other sites
+unifictl networks --overlaps -o xlsx -f networks.xlsx   # Excel, clashes in red
+unifictl vpn                      # VPN servers (with subnet) and site-to-site tunnels
+unifictl sites -o json | jq .     # JSON output (-f FILE writes to a file)
+unifictl devices -o xlsx -f devices.xlsx   # Excel, for any command
 ```
 
 ## Limits (from ui.com, not this tool)
@@ -68,11 +74,23 @@ unifictl sites -o json | jq .     # JSON output
   site) that's enough; for a hosted server with many customers it isn't, so
   `SITE` shows `-` and `devices -s` can't match them.
 - **No list of connected clients**, only counts per site.
-- **`networks` needs the owner's key.** ui.com only lets a key reach a
+- **`networks` and `vpn` need the owner's key.** ui.com only lets a key reach a
   console's Network application if the key's account owns the console and the
   key includes it. Other consoles are skipped with a warning.
-- **`networks` is slow** (about a minute for ~25 sites): ui.com rate-limits
-  requests, and each network's subnet needs its own request.
+- **`networks --overlaps` checks VPN server subnets too.** They are listed as
+  extra rows (VLAN `VPN`) because they need to be routable as well.
+  Site-to-site tunnels' remote subnets are left out: they point at another
+  site's networks on purpose.
+- **`networks` and `vpn` are slow** (about a minute each for ~25 sites;
+  `networks --overlaps` does both): ui.com
+  rate-limits requests, and each network's subnet needs its own request. Use
+  `-n` or the ignore list to query fewer sites.
+- **VPN subnets come from an undocumented API.** The official API only gives a
+  VPN's name, type and on/off state. unifictl reads the subnets from the
+  Network application's older, undocumented API (`/api/s/<site>/rest/networkconf`),
+  which Ubiquiti may change. If that fails, `vpn` still lists the VPNs, without
+  subnets, and warns. That endpoint also returns VPN private keys; unifictl
+  never reads or stores them, but it's one more reason to guard the API key.
 - **Site names follow ui.com.** A console with a single site called "Default"
   is shown by the console's name, as unifi.ui.com does. This is observed
   behaviour, not documented; `-o json` keeps the raw name in `siteName`. See
