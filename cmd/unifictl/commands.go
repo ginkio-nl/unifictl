@@ -32,7 +32,7 @@ func (c *SitesCmd) Run(ctx context.Context, g *Globals) error {
 
 	var rows []report.Site
 	for _, s := range report.Sites(hosts, sites) {
-		if report.Match(c.Name, s.Name, s.SiteName) && (!c.Offline || s.Offline > 0) {
+		if !g.ignored(s.Name) && report.Match(c.Name, s.Name, s.SiteName) && (!c.Offline || s.Offline > 0) {
 			rows = append(rows, s)
 		}
 	}
@@ -75,7 +75,7 @@ func (c *DevicesCmd) Run(ctx context.Context, g *Globals) error {
 
 	var rows []report.Device
 	for _, d := range report.Devices(hosts, sites, inventory) {
-		if !report.Match(c.Site, d.Site) || !report.Match(c.Host, d.Host) {
+		if g.ignored(d.Site) || !report.Match(c.Site, d.Site) || !report.Match(c.Host, d.Host) {
 			continue
 		}
 		if (c.Offline && d.Status != "offline") || (c.Updates && !d.UpdateAvailable) {

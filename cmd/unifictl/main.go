@@ -16,7 +16,9 @@ import (
 	"github.com/alecthomas/kong"
 	"github.com/joho/godotenv"
 
+	"github.com/ginkio-nl/unifictl/internal/config"
 	"github.com/ginkio-nl/unifictl/internal/httpx"
+	"github.com/ginkio-nl/unifictl/internal/report"
 	"github.com/ginkio-nl/unifictl/internal/sitemanager"
 )
 
@@ -40,8 +42,12 @@ func buildVersion() string {
 
 // Globals are flags shared by every command.
 type Globals struct {
-	Output  string        `short:"o" enum:"table,json" default:"table" help:"Output format (${enum})."`
-	Timeout time.Duration `default:"30s" help:"Per-request timeout."`
+	Config   string        `short:"c" type:"path" default:"~/.config/unifictl/config.yaml" env:"UNIFICTL_CONFIG" help:"Settings file (optional)."`
+	NoIgnore bool          `help:"Show sites on the config file's ignore list too."`
+	Output   string        `short:"o" enum:"table,json" default:"table" help:"Output format (${enum})."`
+	Timeout  time.Duration `default:"30s" help:"Per-request timeout."`
+
+	ignore []string
 }
 
 // CLI is the root command.
@@ -79,14 +85,28 @@ func main() {
 	kctx.FatalIfErrorf(kctx.Run(&cli.Globals))
 }
 
-// client builds a Site Manager client from the API key in the environment.
+// client loads the config file and builds a Site Manager client from the API
+// key in the environment.
 func (g *Globals) client() (*sitemanager.Client, error) {
+	cfg, err := config.Load(g.Config)
+	if err != nil {
+		return nil, err
+	}
+	if !g.NoIgnore {
+		g.ignore = cfg.Ignore
+	}
+
 	key := os.Getenv(keyEnv)
 	if key == "" {
 		return nil, fmt.Errorf("%s is not set: add it to ~/.config/unifictl/.env (create a key at unifi.ui.com → Settings → API Keys; for networks it must come from the consoles' owner and include UniFi Applications → Network)", keyEnv)
 	}
 	req := httpx.New(httpx.Options{APIKey: key, Timeout: g.Timeout, Limiter: httpx.NewLimiter(2)})
 	return sitemanager.New(sitemanager.DefaultURL, req), nil
+}
+
+// ignored reports whether a site is on the config file's ignore list.
+func (g *Globals) ignored(site string) bool {
+	return site != "" && len(g.ignore) > 0 && report.Match(g.ignore, site)
 }
 
 func dotenvPaths() []string {

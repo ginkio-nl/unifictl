@@ -32,6 +32,21 @@ The key is read from `UNIFI_API_KEY`: an exported variable wins, then
 `./.env`, then `~/.config/unifictl/.env`. unifictl refuses to run if a `.env`
 file is readable by anyone but you (it must be `600` or `400`).
 
+### Ignoring sites (optional)
+
+To hide sites everywhere, list them in `~/.config/unifictl/config.yaml`
+(see `config.example.yaml`):
+
+```yaml
+ignore:
+  - Default
+  - "Dream Router"
+  - "keesde*"      # wildcards work
+```
+
+Names are matched case-insensitively against the site name unifictl shows.
+`--no-ignore` shows everything for one run; `-c` points at another file.
+
 ## Usage
 
 ```sh

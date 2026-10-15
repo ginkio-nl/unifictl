@@ -30,15 +30,22 @@ func (c *NetworksCmd) Run(ctx context.Context, g *Globals) error {
 		return fmt.Errorf("list sites: %w", err)
 	}
 
-	// Only consoles that run a Network application have sites.
-	hasSites := make(map[string]bool)
-	for _, s := range sites {
-		hasSites[s.HostID] = true
+	keep := func(site string) bool {
+		return !g.ignored(site) && report.Match(c.Name, site)
+	}
+
+	// Only query consoles that have at least one site we're going to show
+	// (consoles without a Network application have no sites at all).
+	wanted := make(map[string]bool)
+	for _, s := range report.Sites(hosts, sites) {
+		if keep(s.Name) {
+			wanted[s.HostID] = true
+		}
 	}
 
 	var consoles []network.Console
 	for _, h := range hosts {
-		if h.IsBlocked || !hasSites[h.ID] {
+		if h.IsBlocked || !wanted[h.ID] {
 			continue
 		}
 		name := h.Name()
@@ -56,16 +63,9 @@ func (c *NetworksCmd) Run(ctx context.Context, g *Globals) error {
 		})
 	}
 
-	all, errs := network.Collect(ctx, consoles, 8)
+	rows, errs := network.Collect(ctx, consoles, 8, keep)
 	for _, err := range errs {
 		warn("%v", err)
-	}
-
-	var rows []network.Row
-	for _, r := range all {
-		if report.Match(c.Name, r.Site) {
-			rows = append(rows, r)
-		}
 	}
 
 	if g.Output == "json" {

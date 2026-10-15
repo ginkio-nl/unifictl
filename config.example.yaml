@@ -1,0 +1,9 @@
+# unifictl settings — copy to ~/.config/unifictl/config.yaml
+# (API keys don't go here; they live in ~/.config/unifictl/.env)
+
+# Sites to hide in sites, devices and networks. Names as unifictl shows them;
+# case-insensitive; * and ? work as wildcards. Use --no-ignore to see them anyway.
+ignore:
+  # - Default
+  # - "Dream Router"
+  # - "keesde*"

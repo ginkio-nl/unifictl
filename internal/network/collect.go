@@ -39,10 +39,11 @@ type Error struct {
 func (e Error) Error() string { return fmt.Sprintf("%s: %v", e.Where, e.Err) }
 func (e Error) Unwrap() error { return e.Err }
 
-// Collect reads all networks of all sites on the consoles, with at most
-// limit requests in flight. Failures are returned per console or site; the
-// rows of everything else are still returned, sorted by site and VLAN.
-func Collect(ctx context.Context, consoles []Console, limit int) ([]Row, []error) {
+// Collect reads all networks of the sites on the consoles for which keep
+// returns true (given the site's display name), with at most limit requests
+// in flight. Failures are returned per console or site; the rows of
+// everything else are still returned, sorted by site and VLAN.
+func Collect(ctx context.Context, consoles []Console, limit int, keep func(site string) bool) ([]Row, []error) {
 	type siteRef struct {
 		console Console
 		site    Site
@@ -60,7 +61,10 @@ func Collect(ctx context.Context, consoles []Console, limit int) ([]Row, []error
 			continue
 		}
 		for _, s := range siteLists[i] {
-			sites = append(sites, siteRef{console: c, site: s, name: c.DisplayName(s, len(siteLists[i]))})
+			name := c.DisplayName(s, len(siteLists[i]))
+			if keep(name) {
+				sites = append(sites, siteRef{console: c, site: s, name: name})
+			}
 		}
 	}
 
