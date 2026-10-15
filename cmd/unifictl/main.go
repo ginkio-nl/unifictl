@@ -21,7 +21,7 @@ import (
 )
 
 // keyEnv names the environment variable holding the ui.com API key.
-const keyEnv = "UNIFI_SITEMANAGER_KEY"
+const keyEnv = "UNIFI_API_KEY"
 
 // version is set via -ldflags by the Makefile; see buildVersion.
 var version string
@@ -48,9 +48,10 @@ type Globals struct {
 type CLI struct {
 	Globals
 
-	Sites   SitesCmd         `cmd:"" help:"List all sites with device and client counts."`
-	Devices DevicesCmd       `cmd:"" help:"List all devices."`
-	Version kong.VersionFlag `help:"Print version and exit."`
+	Sites    SitesCmd         `cmd:"" help:"List all sites with device and client counts."`
+	Devices  DevicesCmd       `cmd:"" help:"List all devices."`
+	Networks NetworksCmd      `cmd:"" help:"List all networks (name, VLAN, subnet) per site."`
+	Version  kong.VersionFlag `help:"Print version and exit."`
 }
 
 func main() {
@@ -82,9 +83,9 @@ func main() {
 func (g *Globals) client() (*sitemanager.Client, error) {
 	key := os.Getenv(keyEnv)
 	if key == "" {
-		return nil, fmt.Errorf("%s is not set: add it to ~/.config/unifictl/.env (create a key at unifi.ui.com → Settings → API Keys)", keyEnv)
+		return nil, fmt.Errorf("%s is not set: add it to ~/.config/unifictl/.env (create a key at unifi.ui.com → Settings → API Keys; for networks it must come from the consoles' owner and include UniFi Applications → Network)", keyEnv)
 	}
-	req := httpx.New(httpx.Options{APIKey: key, Timeout: g.Timeout, Limiter: httpx.NewLimiter(4)})
+	req := httpx.New(httpx.Options{APIKey: key, Timeout: g.Timeout, Limiter: httpx.NewLimiter(2)})
 	return sitemanager.New(sitemanager.DefaultURL, req), nil
 }
 
@@ -97,11 +98,21 @@ func dotenvPaths() []string {
 }
 
 // loadDotenv sets variables from a .env file if it exists. Variables already
-// in the environment take precedence.
+// in the environment take precedence. The file holds API keys that can change
+// settings, so it is refused unless only its owner can read it (0600 or 0400).
 func loadDotenv(path string) error {
-	err := godotenv.Load(path)
-	if err == nil || errors.Is(err, fs.ErrNotExist) {
+	info, err := os.Stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
 		return nil
 	}
-	return fmt.Errorf("load %s: %w", path, err)
+	if err != nil {
+		return err
+	}
+	if perm := info.Mode().Perm(); perm&0o077 != 0 {
+		return fmt.Errorf("%s is readable by others (mode %04o); it holds API keys, so fix it with: chmod 600 %s", path, perm, path)
+	}
+	if err := godotenv.Load(path); err != nil {
+		return fmt.Errorf("load %s: %w", path, err)
+	}
+	return nil
 }

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	maxRetries    = 3
+	maxRetries    = 8
 	maxRetryDelay = 30 * time.Second
 	maxBodyBytes  = 32 << 20
 )

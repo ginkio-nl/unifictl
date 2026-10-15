@@ -4,9 +4,10 @@ A Go command-line tool that gives an MSP an overview of all its customers'
 UniFi networks, using a single unifi.ui.com API key.
 
 It lists every site with its device, offline, and client counts and its
-internet provider, and every device with its status and firmware. It works for
-all sites your ui.com account can see — including consoles you administer but
-don't own.
+internet provider; every device with its status and firmware; and every
+network per site with its VLAN, subnet, gateway, and DHCP range.
+
+unifictl only ever reads: it sends GET requests and nothing else.
 
 ## Install
 
@@ -16,7 +17,10 @@ go install github.com/ginkio-nl/unifictl/cmd/unifictl@latest
 
 ## Configure
 
-Create an API key at **unifi.ui.com → Settings → API Keys**, then:
+Create an API key at **unifi.ui.com → Settings → API Keys**. For `networks`
+the key must be created by the **owner** of the consoles, with **UniFi
+Applications → Network** ticked for the sites you want. ui.com has no read-only
+keys, so treat it as a key that can change settings. Then:
 
 ```sh
 mkdir -p ~/.config/unifictl
@@ -24,8 +28,9 @@ cp .env.example ~/.config/unifictl/.env   # paste the key in
 chmod 600 ~/.config/unifictl/.env
 ```
 
-The key is read from `UNIFI_SITEMANAGER_KEY`: an exported variable wins, then
-`./.env`, then `~/.config/unifictl/.env`.
+The key is read from `UNIFI_API_KEY`: an exported variable wins, then
+`./.env`, then `~/.config/unifictl/.env`. unifictl refuses to run if a `.env`
+file is readable by anyone but you (it must be `600` or `400`).
 
 ## Usage
 
@@ -36,6 +41,8 @@ unifictl sites -n 'keesde*'       # sites by name
 unifictl devices --offline        # offline devices
 unifictl devices --updates        # devices with a firmware update
 unifictl devices -s 'svrk*'       # devices of a site
+unifictl networks                 # networks per site: VLAN, subnet, DHCP
+unifictl networks -n 'earforce*'  # networks of one site
 unifictl sites -o json | jq .     # JSON output
 ```
 
@@ -46,10 +53,15 @@ unifictl sites -o json | jq .     # JSON output
   site) that's enough; for a hosted server with many customers it isn't, so
   `SITE` shows `-` and `devices -s` can't match them.
 - **No list of connected clients**, only counts per site.
+- **`networks` needs the owner's key.** ui.com only lets a key reach a
+  console's Network application if the key's account owns the console and the
+  key includes it. Other consoles are skipped with a warning.
+- **`networks` is slow** (about a minute for ~25 sites): ui.com rate-limits
+  requests, and each network's subnet needs its own request.
 - **Site names follow ui.com.** A console with a single site called "Default"
   is shown by the console's name, as unifi.ui.com does. This is observed
   behaviour, not documented; `-o json` keeps the raw name in `siteName`. See
-  `siteName` in `internal/report/report.go`.
+  `DisplayName` in `internal/report/report.go`.
 
 ## Development
 

@@ -1,5 +1,6 @@
 // Package sitemanager is a minimal client for the UniFi Site Manager API
-// (api.ui.com): the hosts, sites, and devices an API key can see.
+// (api.ui.com): the hosts, sites, and devices an API key can see, and the
+// cloud connector URL for reaching a console's Network application.
 package sitemanager
 
 import (
@@ -97,6 +98,17 @@ type Device struct {
 	FirmwareStatus string `json:"firmwareStatus"` // "upToDate", "updateAvailable"
 	IsConsole      bool   `json:"isConsole"`
 }
+
+// NetworkBase returns the root of a console's Network Integration API,
+// reached through the cloud connector. ui.com only allows this when the API
+// key's account owns the console and the key has the Network application
+// scope for it.
+func (c *Client) NetworkBase(hostID string) string {
+	return c.base + "/v1/connector/consoles/" + url.PathEscape(hostID) + "/proxy/network/integration"
+}
+
+// Requester returns the HTTP requester, to share its key and rate limit.
+func (c *Client) Requester() *httpx.Requester { return c.req }
 
 type listPage[T any] struct {
 	Data      []T    `json:"data"`

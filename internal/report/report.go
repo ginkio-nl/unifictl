@@ -36,25 +36,28 @@ type Device struct {
 	UpdateAvailable bool   `json:"updateAvailable"`
 }
 
-// siteName is the name unifi.ui.com shows for a site.
+// DisplayName is the name unifi.ui.com shows for a site.
 //
 // A console with a single site (a customer's own UDM, Cloud Gateway, …)
 // usually keeps UniFi's auto-created site name "Default"; ui.com then shows
-// the console's name instead. A server with many sites (e.g. a hosted UniFi
-// OS Server) shows each site's own name — including its own, usually empty,
-// "Default" site.
+// the console's name instead. A server with many sites shows each site's own
+// name — including its own, usually empty, "Default" site.
 //
 // This mirrors observed ui.com behaviour, not a documented rule. If names
 // ever look wrong, this is the place to look; JSON output keeps the raw
 // site name in "siteName".
+func DisplayName(siteName, reference, hostName string, hostSites int) string {
+	if hostSites == 1 && strings.EqualFold(siteName, "default") {
+		return hostName
+	}
+	if siteName != "" {
+		return siteName
+	}
+	return reference
+}
+
 func siteName(s sitemanager.Site, h hostInfo) string {
-	if h.sites == 1 && strings.EqualFold(s.Meta.Desc, "default") {
-		return h.name
-	}
-	if s.Meta.Desc != "" {
-		return s.Meta.Desc
-	}
-	return s.Meta.Name
+	return DisplayName(s.Meta.Desc, s.Meta.Name, h.name, h.sites)
 }
 
 type hostInfo struct {
